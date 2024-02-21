@@ -7,9 +7,6 @@ set -eu
 INSTALLER_OWNER="zekihan"
 INSTALLER_REPO="scripts"
 
-TARGET_OWNER="jqlang"
-TARGET_REPO="jq"
-
 function source_from_local() {
 	local file_path
 	file_path=$1
@@ -41,26 +38,20 @@ function source_file() {
 	fi
 }
 
-# shellcheck source=common/source_commons.sh
-eval "$(source_file common/source_commons.sh)"
+# shellcheck source=common/check_command.sh
+eval "$(source_file common/check_command.sh)"
 
-tmp_dir=$(mktemp -d)
+# shellcheck source=common/copy_and_set_permissions.sh
+eval "$(source_file common/copy_and_set_permissions.sh)"
 
-os=$(get_os_type_2)
-arch=$(get_arch)
-latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
-latest_version=${latest_version_tag#jq-}
-file="jq-${os}-${arch}"
+# shellcheck source=common/download_file.sh
+eval "$(source_file common/download_file.sh)"
 
-output_file="${tmp_dir}/jq"
-url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/jq-${latest_version}/${file}"
+# shellcheck source=common/get_arch.sh
+eval "$(source_file common/get_arch.sh)"
 
-download_file "${url}" "${output_file}"
+# shellcheck source=common/get_latest_version_from_github.sh
+eval "$(source_file common/get_latest_version_from_github.sh)"
 
-copy_and_set_permissions "${output_file}"
-
-echo "Installed jq ${latest_version}"
-
-jq --version
-
-rm -rf "${tmp_dir}"
+# shellcheck source=common/get_os.sh
+eval "$(source_file common/get_os.sh)"

@@ -1,80 +1,68 @@
 #!/usr/bin/env bash
 
-set -e
+# -e: exit on error
+# -u: exit on unset variables
+set -eu
 
-REPO="FiloSottile/age"
+INSTALLER_OWNER="zekihan"
+INSTALLER_REPO="scripts"
 
-check_command() {
-	command -v "$1" >/dev/null 2>&1 || {
-		echo >&2 "$1 is required but it's not installed. Aborting."
+TARGET_OWNER="FiloSottile"
+TARGET_REPO="age"
+
+function source_from_local() {
+	local file_path
+	file_path=$1
+	cat "../${file_path}"
+}
+
+function source_from_remote() {
+	local file_path
+	local url
+	file_path=$1
+	url="https://raw.githubusercontent.com/${INSTALLER_OWNER}/${INSTALLER_REPO}/main/${file_path}"
+	if command -v curl >/dev/null; then
+		curl -fsSL "${url}"
+	elif command -v wget >/dev/null; then
+		wget -qO- "${url}"
+	fi
+}
+
+function source_file() {
+	local file_path
+	file_path=$1
+	if [ -f "../${file_path}" ]; then
+		source_from_local "${file_path}"
+	elif command -v curl >/dev/null || command -v wget >/dev/null; then
+		source_from_remote "${file_path}"
+	else
+		echo "curl or wget is required but it's not installed. Aborting." >&2
 		exit 1
-	}
+	fi
 }
 
-copy_and_set_permissions() {
-	sudo cp "$1" /usr/local/bin/
-	sudo chmod +x /usr/local/bin/"$(basename "$1")"
-}
-
-check_command curl
-check_command jq
-
-get_os() {
-	os=$(uname -s)
-	case $os in
-	Darwin)
-		echo "darwin"
-		;;
-	Linux)
-		echo "linux"
-		;;
-	*)
-		echo "Unsupported OS: ${os}"
-		exit 1
-		;;
-	esac
-}
-
-get_arch() {
-	arch=$(uname -m)
-	case $arch in
-	x86_64)
-		echo "amd64"
-		;;
-	aarch64)
-		echo "arm64"
-		;;
-	*)
-		echo "Unsupported Arch: ${os}"
-		exit 1
-		;;
-	esac
-}
-
-get_latest_release() {
-	repo=$1
-	curl --silent "https://api.github.com/repos/$repo/releases/latest" | jq -r .tag_name
-}
+# shellcheck source=common/source_commons.sh
+eval "$(source_file common/source_commons.sh)"
 
 tmp_dir=$(mktemp -d)
 
 os=$(get_os)
 arch=$(get_arch)
-latest_version_tag=$(get_latest_release $REPO)
+latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
 latest_version=${latest_version_tag#v}
-file=age-v"$latest_version"-"$os"-"$arch"
+file="age-v${latest_version}-${os}-${arch}"
 
-curl --silent --show-error --location \
-	https://github.com/"$REPO"/releases/download/v"$latest_version"/"$file".tar.gz \
-	-o "$tmp_dir"/"$file".tar.gz || {
-	echo "Download failed. Aborting."
-	exit 1
-}
+output_file="${tmp_dir}/age.tar.gz"
+url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.tar.gz"
 
-tar -xf "$tmp_dir"/"$file".tar.gz -C "$tmp_dir"
+download_file "${url}" "${output_file}"
 
-copy_and_set_permissions "$tmp_dir"/age/age
+tar -xf "${output_file}" -C "${tmp_dir}"
 
-echo "Installed age $latest_version"
+copy_and_set_permissions "${tmp_dir}/age/age"
 
-rm -rf "$tmp_dir"
+echo "Installed age ${latest_version}"
+
+age --version
+
+rm -rf "${tmp_dir}"
