@@ -6,7 +6,7 @@ set -eu
 
 url="https://starship.rs/install.sh"
 if command -v curl >/dev/null; then
-	curl -fsSL "${url}" | sh
+	curl -fsSL "${url}" | sh -s -- "$@"
 elif command -v wget >/dev/null; then
-	wget -qO- "${url}" | sh
+	wget -qO- "${url}" | sh -s -- "$@"
 fi
