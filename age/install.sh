@@ -44,25 +44,65 @@ function source_file() {
 # shellcheck source=common/source_commons.sh
 eval "$(source_file common/source_commons.sh)"
 
-tmp_dir=$(mktemp -d)
+function get_current_version() {
+	local version
+	version="0.0.0"
+	if command -v age >/dev/null; then
+		version=$(age --version)
+		version=${version#v}
+	fi
+	echo "${version}"
+}
 
-os=$(get_os)
-arch=$(get_arch)
-latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
-latest_version=${latest_version_tag#v}
-file="age-v${latest_version}-${os}-${arch}"
+function main() {
+	if ! latest_version_tag=$(get_latest_release "${TARGET_OWNER}" "${TARGET_REPO}"); then
+		exit 1
+	fi
+	latest_version=${latest_version_tag#v}
+	current_version=$(get_current_version)
 
-output_file="${tmp_dir}/age.tar.gz"
-url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.tar.gz"
+	if ${FORCE}; then
+		echo "Force mode is enabled. Installing age ${latest_version} regardless of the current version."
+	else
+		compare_versions_and_exit "${current_version}" "${latest_version}"
+		if [ "${current_version}" = "0.0.0" ]; then
+			echo "Installing age ${latest_version}."
+		else
+			echo "Upgrading age ${current_version} -> ${latest_version}"
+		fi
+	fi
 
-download_file "${url}" "${output_file}"
+	os=$(get_os)
+	arch=$(get_arch)
 
-tar -xf "${output_file}" -C "${tmp_dir}"
+	tmp_dir=$(mktemp -d)
 
-copy_and_set_permissions "${tmp_dir}/age/age"
+	file="age-v${latest_version}-${os}-${arch}"
+	output_file="${tmp_dir}/age.tar.gz"
+	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.tar.gz"
 
-echo "Installed age ${latest_version}"
+	download_file "${url}" "${output_file}"
 
-age --version
+	tar -xf "${output_file}" -C "${tmp_dir}"
 
-rm -rf "${tmp_dir}"
+	copy_and_set_permissions "${tmp_dir}/age/age"
+
+	rm -rf "${tmp_dir}"
+}
+
+FORCE=false
+
+while getopts ":f" opt; do
+	case ${opt} in
+		f)
+			FORCE=true
+			;;
+		\?)
+			echo "Invalid option: $OPTARG" 1>&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+main

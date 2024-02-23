@@ -55,3 +55,6 @@ eval "$(source_file common/get_latest_version_from_github.sh)"
 
 # shellcheck source=common/get_os.sh
 eval "$(source_file common/get_os.sh)"
+
+# shellcheck source=common/version_check.sh
+eval "$(source_file common/version_check.sh)"

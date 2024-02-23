@@ -44,23 +44,65 @@ function source_file() {
 # shellcheck source=common/source_commons.sh
 eval "$(source_file common/source_commons.sh)"
 
-tmp_dir=$(mktemp -d)
+function get_current_version() {
+	local version
+	version="0.0.0"
+	if command -v yq >/dev/null; then
+		version=$(yq --version)
+		# yq (https://github.com/mikefarah/yq/) version v4.41.1
+		version=${version##*v}
+	fi
+	echo "${version}"
+}
 
-os=$(get_os)
-arch=$(get_arch)
-latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
-latest_version=${latest_version_tag#v}
-file="yq_${os}_${arch}"
+function main() {
+	if ! latest_version_tag=$(get_latest_release "${TARGET_OWNER}" "${TARGET_REPO}"); then
+		exit 1
+	fi
+	latest_version=${latest_version_tag#v}
+	current_version=$(get_current_version)
 
-output_file="${tmp_dir}/yq"
-url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}"
+	if ${FORCE}; then
+		echo "Force mode is enabled. Installing yq ${latest_version} regardless of the current version."
+	else
+		compare_versions_and_exit "${current_version}" "${latest_version}"
+		if [ "${current_version}" = "0.0.0" ]; then
+			echo "Installing yq ${latest_version}."
+		else
+			echo "Upgrading yq ${current_version} -> ${latest_version}"
+		fi
+	fi
 
-download_file "${url}" "${output_file}"
+	os=$(get_os)
+	arch=$(get_arch)
 
-copy_and_set_permissions "${output_file}"
+	tmp_dir=$(mktemp -d)
 
-echo "Installed yq ${latest_version}"
+	file="yq_${os}_${arch}"
 
-yq --version
+	output_file="${tmp_dir}/yq"
+	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}"
 
-rm -rf "${tmp_dir}"
+	download_file "${url}" "${output_file}"
+
+	copy_and_set_permissions "${output_file}"
+
+	rm -rf "${tmp_dir}"
+}
+
+FORCE=false
+
+while getopts ":f" opt; do
+	case ${opt} in
+		f)
+			FORCE=true
+			;;
+		\?)
+			echo "Invalid option: $OPTARG" 1>&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+main

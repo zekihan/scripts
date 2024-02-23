@@ -44,45 +44,86 @@ function source_file() {
 # shellcheck source=common/source_commons.sh
 eval "$(source_file common/source_commons.sh)"
 
-tmp_dir=$(mktemp -d)
+function get_current_version() {
+	local version
+	version="0.0.0"
+	if command -v fzf >/dev/null; then
+		version=$(fzf --version)
+		version=${version%% *}
+	fi
+	echo "${version}"
+}
 
-os=$(get_os)
-arch=$(get_arch)
-latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
-latest_version=${latest_version_tag}
-file="fzf-${latest_version}-${os}_${arch}"
-
-case $os in
-	linux)
-		file_ext="tar.gz"
-		;;
-	darwin)
-		file_ext="zip"
-		;;
-	*)
-		echo "Unsupported OS: ${os}"
+function main() {
+	if ! latest_version_tag=$(get_latest_release "${TARGET_OWNER}" "${TARGET_REPO}"); then
 		exit 1
-		;;
-esac
+	fi
+	latest_version=${latest_version_tag}
+	current_version=$(get_current_version)
 
-output_file="${tmp_dir}/fzf.${file_ext}"
-url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/${latest_version}/${file}.${file_ext}"
+	if ${FORCE}; then
+		echo "Force mode is enabled. Installing fzf ${latest_version} regardless of the current version."
+	else
+		compare_versions_and_exit "${current_version}" "${latest_version}"
+		if [ "${current_version}" = "0.0.0" ]; then
+			echo "Installing fzf ${latest_version}."
+		else
+			echo "Upgrading fzf ${current_version} -> ${latest_version}"
+		fi
+	fi
 
-download_file "${url}" "${output_file}"
+	os=$(get_os)
+	arch=$(get_arch)
 
-case $file_ext in
-	zip)
-		unzip "${output_file}" -d "${tmp_dir}"
-		;;
-	tar.gz)
-		tar -xf "${output_file}" -C "${tmp_dir}"
-		;;
-esac
+	tmp_dir=$(mktemp -d)
 
-copy_and_set_permissions "${tmp_dir}/fzf"
+	file="fzf-${latest_version}-${os}_${arch}"
 
-echo "Installed fzf ${latest_version}"
+	case $os in
+		linux)
+			file_ext="tar.gz"
+			;;
+		darwin)
+			file_ext="zip"
+			;;
+		*)
+			echo "Unsupported OS: ${os}"
+			exit 1
+			;;
+	esac
 
-fzf --version
+	output_file="${tmp_dir}/fzf.${file_ext}"
+	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/${latest_version}/${file}.${file_ext}"
 
-rm -rf "${tmp_dir}"
+	download_file "${url}" "${output_file}"
+
+	case $file_ext in
+		zip)
+			unzip "${output_file}" -d "${tmp_dir}"
+			;;
+		tar.gz)
+			tar -xf "${output_file}" -C "${tmp_dir}"
+			;;
+	esac
+
+	copy_and_set_permissions "${tmp_dir}/fzf"
+
+	rm -rf "${tmp_dir}"
+}
+
+FORCE=false
+
+while getopts ":f" opt; do
+	case ${opt} in
+		f)
+			FORCE=true
+			;;
+		\?)
+			echo "Invalid option: $OPTARG" 1>&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+main

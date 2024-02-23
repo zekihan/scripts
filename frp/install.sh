@@ -44,62 +44,81 @@ function source_file() {
 # shellcheck source=common/source_commons.sh
 eval "$(source_file common/source_commons.sh)"
 
-is_server=1
-is_client=1
+function get_current_version() {
+	local version
+	version="0.0.0"
+	if command -v frps >/dev/null; then
+		version=$(frps --version)
+		version=${version#v}
+	elif command -v frpc >/dev/null; then
+		version=$(frpc --version)
+		version=${version#v}
+	fi
+	echo "${version}"
+}
 
-# Disable -u
-set +u
+function main() {
+	if ! latest_version_tag=$(get_latest_release "${TARGET_OWNER}" "${TARGET_REPO}"); then
+		exit 1
+	fi
+	latest_version=${latest_version_tag#v}
+	current_version=$(get_current_version)
 
-if [ "$1" == "server" ]; then
-	is_client=0
-elif [ "$1" == "client" ]; then
-	is_server=0
-fi
+	if ${FORCE}; then
+		echo "Force mode is enabled. Installing frp ${latest_version} regardless of the current version."
+	else
+		compare_versions_and_exit "${current_version}" "${latest_version}"
+		if [ "${current_version}" = "0.0.0" ]; then
+			echo "Installing frp ${latest_version}."
+		else
+			echo "Upgrading frp ${current_version} -> ${latest_version}"
+		fi
+	fi
 
-# Re-enable -u
-set -u
+	os=$(get_os)
+	arch=$(get_arch)
 
-tmp_dir=$(mktemp -d)
+	tmp_dir=$(mktemp -d)
 
-os=$(get_os)
-arch=$(get_arch)
-latest_version_tag=$(get_latest_release $TARGET_OWNER $TARGET_REPO)
-latest_version=${latest_version_tag#v}
-file="frp_${latest_version}_${os}_${arch}"
+	file="frp_${latest_version}_${os}_${arch}"
 
-output_file="${tmp_dir}/frp.tar.gz"
-url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.tar.gz"
+	output_file="${tmp_dir}/frp.tar.gz"
+	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.tar.gz"
 
-download_file "${url}" "${output_file}"
+	download_file "${url}" "${output_file}"
 
-tar -xf "${output_file}" -C "${tmp_dir}"
+	tar -xf "${output_file}" -C "${tmp_dir}"
 
-if [ "${is_server}" -eq 1 ]; then
 	copy_and_set_permissions "${tmp_dir}/${file}/frps"
-fi
-if [ "${is_client}" -eq 1 ]; then
 	copy_and_set_permissions "${tmp_dir}/${file}/frpc"
-fi
 
-if [ "${os}" == "linux" ] && [ -d /etc/systemd/system ] && command -v systemctl &>/dev/null; then
-	if [ "${is_server}" -eq 1 ]; then
-		source_file "frp/systemd/frps@.service" >/etc/systemd/system/frps@.service
+	if [ "${os}" == "linux" ] && [ -d /etc/systemd/system ] && command -v systemctl &>/dev/null; then
+
+		source_file "frp/systemd/frps@.service" | sudo tee /etc/systemd/system/frps@.service >/dev/null
 		sudo mkdir -p /etc/frps
-	fi
-	if [ "${is_client}" -eq 1 ]; then
-		source_file "frp/systemd/frpc@.service" >/etc/systemd/system/frpc@.service
+
+		source_file "frp/systemd/frpc@.service" | sudo tee /etc/systemd/system/frpc@.service >/dev/null
 		sudo mkdir -p /etc/frpc
+
+		sudo systemctl daemon-reload
 	fi
-	sudo systemctl daemon-reload
-fi
 
-if [ "${is_server}" -eq 1 ]; then
-	echo "Installed frp server ${latest_version}"
-	frps --version
-fi
-if [ "${is_client}" -eq 1 ]; then
-	echo "Installed frp client ${latest_version}"
-	frpc --version
-fi
+	rm -rf "${tmp_dir}"
+}
 
-rm -rf "${tmp_dir}"
+FORCE=false
+
+while getopts ":f" opt; do
+	case ${opt} in
+		f)
+			FORCE=true
+			;;
+		\?)
+			echo "Invalid option: $OPTARG" 1>&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+main
