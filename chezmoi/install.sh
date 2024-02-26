@@ -75,9 +75,9 @@ function main() {
 
 	url="get.chezmoi.io"
 	if command -v curl >/dev/null; then
-		sudo sh -c "$(curl -fsSL "${url}")" -- -b "/usr/local/bin"
+		run_elevated sh -c "$(curl -fsSL "${url}")" -- -b "/usr/local/bin"
 	elif command -v wget >/dev/null; then
-		sudo sh -c "$(wget -qO- "${url}")" -- -b "/usr/local/bin"
+		run_elevated sh -c "$(wget -qO- "${url}")" -- -b "/usr/local/bin"
 	fi
 }
 

@@ -94,13 +94,13 @@ function main() {
 
 	if [ "${os}" == "linux" ] && [ -d /etc/systemd/system ] && command -v systemctl &>/dev/null; then
 
-		source_file "frp/systemd/frps@.service" | sudo tee /etc/systemd/system/frps@.service >/dev/null
-		sudo mkdir -p /etc/frps
+		source_file "frp/systemd/frps@.service" | run_elevated tee /etc/systemd/system/frps@.service >/dev/null
+		run_elevated mkdir -p /etc/frps
 
-		source_file "frp/systemd/frpc@.service" | sudo tee /etc/systemd/system/frpc@.service >/dev/null
-		sudo mkdir -p /etc/frpc
+		source_file "frp/systemd/frpc@.service" | run_elevated tee /etc/systemd/system/frpc@.service >/dev/null
+		run_elevated mkdir -p /etc/frpc
 
-		sudo systemctl daemon-reload
+		run_elevated systemctl daemon-reload
 	fi
 
 	rm -rf "${tmp_dir}"
