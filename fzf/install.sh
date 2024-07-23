@@ -58,7 +58,7 @@ function main() {
 	if ! latest_version_tag=$(get_latest_release "${TARGET_OWNER}" "${TARGET_REPO}"); then
 		exit 1
 	fi
-	latest_version=${latest_version_tag}
+	latest_version=${latest_version_tag#v}
 	current_version=$(get_current_version)
 
 	if ${FORCE}; then
@@ -93,7 +93,7 @@ function main() {
 	esac
 
 	output_file="${tmp_dir}/fzf.${file_ext}"
-	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/${latest_version}/${file}.${file_ext}"
+	url="https://github.com/${TARGET_OWNER}/${TARGET_REPO}/releases/download/v${latest_version}/${file}.${file_ext}"
 
 	download_file "${url}" "${output_file}"
 
