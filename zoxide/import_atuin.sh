@@ -44,20 +44,27 @@ eval "$(source_file common/source_commons.sh)"
 check_command zoxide
 check_command atuin
 
-cd_commands=$(atuin history list --cmd-only |
+hist=$(atuin history list --cmd-only)
+
+cd_commands=$(echo "${hist}" |
 	grep "^cd " |
 	sed 's|^cd ||' |
-	sed 's|"Users/zazman"|"home/zekihan"|' |
-	sed 's|zazman|zekihan|')
+  sed 's|~|/home/root|' |
+  sed 's|/Users/|/home/|' |
+  sed 's|/root/|/home/root/|'
+	)
 
-# if the command is not starting with /, it's a relative path and prepend it with the home directory
-cd_commands=$(echo "${cd_commands}" | awk '{ if ($1 !~ /^\//) { print "/home/zekihan/"$1 } else { print $1 } }')
+
+home_dir="${HOME}"
+
+# shellcheck disable=SC2001
+cd_commands=$(echo "${cd_commands}" | sed "s|/home/[^/]*/|${home_dir}/|g")
 
 # Unset the -e flag to continue even if the command fails
 set +e
 
 echo "${cd_commands}" | while read -r cd_command; do
-	zoxide add "${cd_command}"
+	zoxide add "${cd_command}" >/dev/null 2>&1
 done
 
 # Re-enable the -e flag
